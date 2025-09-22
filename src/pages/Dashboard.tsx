@@ -7,16 +7,73 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Building2, History, Plus } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 import heroImage from '@/assets/hero-roof-satellite.jpg';
-import { 
-  createAnalysisRun, 
-  startAnalysisPipeline, 
-  getAnalysisRun, 
-  cancelAnalysisRun,
-  getAnalysisHistory,
-  type AnalysisRun
-} from '@/lib/api';
+
+// Mock data for demonstration
+const mockAnalysisResult = {
+  summary: {
+    address: "123 Main Street, Anytown, USA 12345",
+    overall_risk: "medium" as const,
+    notes: "Well-maintained asphalt shingle roof with minor wear indicators typical for age. Recommended preventive maintenance within 6 months."
+  },
+  measurements: {
+    total_area_sqft: 2847,
+    avg_pitch: "6/12",
+    ridge_length_ft: 184,
+    valley_length_ft: 67,
+    eaves_length_ft: 312
+  },
+  materials: {
+    shingles_bundles: 96,
+    underlayment_sq: 29,
+    drip_edge_ft: 312,
+    flashing_ft: 251,
+    vents_count: 8
+  },
+  cost_breakdown: {
+    labor_usd: 8500,
+    materials_usd: 4200,
+    disposal_usd: 800,
+    contingency_usd: 1350,
+    total_usd: 14850
+  },
+  risks: [
+    "Minor granule loss on south-facing slopes",
+    "Flashing around chimney requires inspection",
+    "Gutter alignment issue on east side",
+    "Tree branches touching roof surface"
+  ],
+  permits: {
+    required: false,
+    notes: "Simple maintenance and repairs do not require permits in this jurisdiction"
+  }
+};
+
+const mockHistoryData = [
+  {
+    id: "1",
+    address: "456 Oak Avenue, Springfield, IL 62704",
+    status: "completed" as const,
+    created_at: "2024-01-15T10:30:00Z",
+    updated_at: "2024-01-15T10:45:00Z",
+    pdf_url: "#download-1"
+  },
+  {
+    id: "2", 
+    address: "789 Pine Street, Madison, WI 53703",
+    status: "failed" as const,
+    created_at: "2024-01-14T14:20:00Z",
+    updated_at: "2024-01-14T14:35:00Z",
+    metadata: { error: "Unable to acquire sufficient satellite imagery resolution" }
+  },
+  {
+    id: "3",
+    address: "321 Elm Drive, Austin, TX 78701",
+    status: "cancelled" as const,
+    created_at: "2024-01-13T09:15:00Z",
+    updated_at: "2024-01-13T09:25:00Z"
+  }
+];
 
 type ViewMode = 'input' | 'processing' | 'results';
 
@@ -24,131 +81,37 @@ export default function Dashboard() {
   const [currentView, setCurrentView] = useState<ViewMode>('input');
   const [activeTab, setActiveTab] = useState('new');
   const [currentAddress, setCurrentAddress] = useState('');
-  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
-  const [currentRun, setCurrentRun] = useState<AnalysisRun | null>(null);
   const [processingStep, setProcessingStep] = useState<'imagery' | 'analysis' | 'calculate' | 'report'>('imagery');
   const [processingStatus, setProcessingStatus] = useState<'processing' | 'completed' | 'failed' | 'cancelled'>('processing');
-  const [historyData, setHistoryData] = useState<AnalysisRun[]>([]);
-  const { toast } = useToast();
 
-  // Polling function to check run status
-  const startPolling = (runId: string) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const run = await getAnalysisRun(runId);
-        if (run) {
-          setCurrentRun(run);
-          
-          // Update UI based on current step
-          if (run.current_step === 'imagery' || run.current_step === 'imagery_complete') {
-            setProcessingStep('imagery');
-          } else if (run.current_step === 'ai_analysis') {
-            setProcessingStep('analysis');
-          } else if (run.current_step === 'analysis_complete') {
-            setProcessingStep('calculate');
-          } else if (run.current_step === 'generating_pdf') {
-            setProcessingStep('report');
-          }
-          
-          // Check if processing is complete
-          if (run.status === 'completed') {
-            setProcessingStatus('completed');
-            setCurrentView('results');
-            clearInterval(pollInterval);
-          } else if (run.status === 'failed') {
-            setProcessingStatus('failed');
-            clearInterval(pollInterval);
-            toast({
-              title: "Analysis Failed",
-              description: run.error_message || "An error occurred during processing",
-              variant: "destructive",
-            });
-          } else if (run.status === 'cancelled') {
-            setProcessingStatus('cancelled');
-            clearInterval(pollInterval);
-          }
-        }
-      } catch (error) {
-        console.error('Error polling run status:', error);
-        clearInterval(pollInterval);
-      }
-    }, 2000); // Poll every 2 seconds
+  const handleAddressSubmit = (address: string) => {
+    setCurrentAddress(address);
+    setCurrentView('processing');
+    setProcessingStep('imagery');
+    setProcessingStatus('processing');
     
-    // Clean up after 5 minutes to prevent infinite polling
-    setTimeout(() => clearInterval(pollInterval), 300000);
+    // Simulate processing steps
+    setTimeout(() => setProcessingStep('analysis'), 2000);
+    setTimeout(() => setProcessingStep('calculate'), 6000);
+    setTimeout(() => setProcessingStep('report'), 8000);
+    setTimeout(() => {
+      setProcessingStatus('completed');
+      setCurrentView('results');
+    }, 10000);
   };
 
-  const handleAddressSubmit = async (address: string) => {
-    try {
-      setCurrentAddress(address);
-      setCurrentView('processing');
-      setProcessingStep('imagery');
-      setProcessingStatus('processing');
-      
-      // Create analysis run
-      const run = await createAnalysisRun(address);
-      setCurrentRunId(run.id);
-      setCurrentRun(run);
-      
-      // Start the analysis pipeline
-      await startAnalysisPipeline(run.id, address);
-      
-      // Start polling for updates
-      startPolling(run.id);
-    } catch (error) {
-      console.error('Error starting analysis:', error);
-      setProcessingStatus('failed');
-      toast({
-        title: "Error Starting Analysis",
-        description: error instanceof Error ? error.message : "Unknown error occurred",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleCancel = async () => {
-    if (currentRunId) {
-      try {
-        await cancelAnalysisRun(currentRunId);
-        setProcessingStatus('cancelled');
-        setTimeout(() => setCurrentView('input'), 1000);
-      } catch (error) {
-        console.error('Error cancelling run:', error);
-        toast({
-          title: "Error Cancelling",
-          description: "Failed to cancel the analysis",
-          variant: "destructive",
-        });
-      }
-    }
+  const handleCancel = () => {
+    setProcessingStatus('cancelled');
+    setTimeout(() => setCurrentView('input'), 1000);
   };
 
   const handleRetry = () => {
     setCurrentView('input');
-    setCurrentRunId(null);
-    setCurrentRun(null);
   };
 
   const handleNewAnalysis = () => {
     setCurrentView('input');
     setActiveTab('new');
-    setCurrentRunId(null);
-    setCurrentRun(null);
-  };
-
-  // Load history when switching to history tab
-  const loadHistory = async () => {
-    try {
-      const history = await getAnalysisHistory();
-      setHistoryData(history);
-    } catch (error) {
-      console.error('Error loading history:', error);
-      toast({
-        title: "Error Loading History",
-        description: "Failed to load analysis history",
-        variant: "destructive",
-      });
-    }
   };
 
   const getProgress = () => {
@@ -176,12 +139,12 @@ export default function Dashboard() {
     );
   }
 
-  if (currentView === 'results' && currentRun?.analysis) {
+  if (currentView === 'results') {
     return (
       <div className="min-h-screen bg-gradient-subtle py-12 px-4">
         <ReportResults
-          analysis={currentRun.analysis}
-          pdfUrl={currentRun.pdf_url || "#"}
+          analysis={mockAnalysisResult}
+          pdfUrl="#sample-report.pdf"
           onRetry={handleRetry}
           onNewAnalysis={handleNewAnalysis}
         />
@@ -245,19 +208,12 @@ export default function Dashboard() {
           
           <TabsContent value="history" className="mt-8">
             <AnalysisHistory 
-              runs={historyData}
+              runs={mockHistoryData}
               onRetryAnalysis={(address) => {
                 setCurrentAddress(address);
                 handleAddressSubmit(address);
               }}
             />
-            {historyData.length === 0 && (
-              <div className="text-center py-8">
-                <Button onClick={loadHistory} variant="outline">
-                  Load Analysis History
-                </Button>
-              </div>
-            )}
           </TabsContent>
         </Tabs>
 
