@@ -1,1 +1,13 @@
 project_id = "falbhbilcdtpnjapctib"
+
+[functions.fetch-satellite-imagery]
+verify_jwt = false
+
+[functions.process-openai-analysis]
+verify_jwt = false
+
+[functions.generate-pdf-report]
+verify_jwt = false
+
+[functions.run-full-pipeline]
+verify_jwt = false

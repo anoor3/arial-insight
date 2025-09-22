@@ -14,7 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      analysis_runs: {
+        Row: {
+          address: string
+          analysis: Json | null
+          cancel_requested: boolean
+          created_at: string
+          current_step: string | null
+          error_message: string | null
+          id: string
+          imagery: Json | null
+          metadata: Json | null
+          pdf_url: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          address: string
+          analysis?: Json | null
+          cancel_requested?: boolean
+          created_at?: string
+          current_step?: string | null
+          error_message?: string | null
+          id?: string
+          imagery?: Json | null
+          metadata?: Json | null
+          pdf_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          analysis?: Json | null
+          cancel_requested?: boolean
+          created_at?: string
+          current_step?: string | null
+          error_message?: string | null
+          id?: string
+          imagery?: Json | null
+          metadata?: Json | null
+          pdf_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
