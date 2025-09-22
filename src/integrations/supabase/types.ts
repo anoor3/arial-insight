@@ -14,7 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      analysis_runs: {
+        Row: {
+          address: string
+          analysis: Json | null
+          cancel_requested: boolean
+          created_at: string
+          current_step: string | null
+          error_message: string | null
+          id: string
+          imagery: Json | null
+          metadata: Json | null
+          pdf_url: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          address: string
+          analysis?: Json | null
+          cancel_requested?: boolean
+          created_at?: string
+          current_step?: string | null
+          error_message?: string | null
+          id?: string
+          imagery?: Json | null
+          metadata?: Json | null
+          pdf_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          address?: string
+          analysis?: Json | null
+          cancel_requested?: boolean
+          created_at?: string
+          current_step?: string | null
+          error_message?: string | null
+          id?: string
+          imagery?: Json | null
+          metadata?: Json | null
+          pdf_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

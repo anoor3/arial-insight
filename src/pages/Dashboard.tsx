@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { AuthRequired } from '@/components/AuthRequired';
 import { AddressInput } from '@/components/AddressInput';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { ReportResults } from '@/components/ReportResults';
@@ -6,10 +8,14 @@ import { AnalysisHistory } from '@/components/AnalysisHistory';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, History, Plus } from 'lucide-react';
+import { Building2, History, Plus, LogOut, User } from 'lucide-react';
+import { getAnalysisRuns, createAnalysisRun, AnalysisRun } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 import heroImage from '@/assets/hero-roof-satellite.jpg';
 
-// Mock data for demonstration
+type ViewMode = 'input' | 'processing' | 'results';
+
+// Mock analysis result for completed reports
 const mockAnalysisResult = {
   summary: {
     address: "123 Main Street, Anytown, USA 12345",
@@ -49,55 +55,90 @@ const mockAnalysisResult = {
   }
 };
 
-const mockHistoryData = [
-  {
-    id: "1",
-    address: "456 Oak Avenue, Springfield, IL 62704",
-    status: "completed" as const,
-    created_at: "2024-01-15T10:30:00Z",
-    updated_at: "2024-01-15T10:45:00Z",
-    pdf_url: "#download-1"
-  },
-  {
-    id: "2", 
-    address: "789 Pine Street, Madison, WI 53703",
-    status: "failed" as const,
-    created_at: "2024-01-14T14:20:00Z",
-    updated_at: "2024-01-14T14:35:00Z",
-    metadata: { error: "Unable to acquire sufficient satellite imagery resolution" }
-  },
-  {
-    id: "3",
-    address: "321 Elm Drive, Austin, TX 78701",
-    status: "cancelled" as const,
-    created_at: "2024-01-13T09:15:00Z",
-    updated_at: "2024-01-13T09:25:00Z"
-  }
-];
-
-type ViewMode = 'input' | 'processing' | 'results';
-
 export default function Dashboard() {
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
   const [currentView, setCurrentView] = useState<ViewMode>('input');
   const [activeTab, setActiveTab] = useState('new');
   const [currentAddress, setCurrentAddress] = useState('');
   const [processingStep, setProcessingStep] = useState<'imagery' | 'analysis' | 'calculate' | 'report'>('imagery');
   const [processingStatus, setProcessingStatus] = useState<'processing' | 'completed' | 'failed' | 'cancelled'>('processing');
+  const [analysisRuns, setAnalysisRuns] = useState<AnalysisRun[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleAddressSubmit = (address: string) => {
+  // Load user's analysis runs
+  useEffect(() => {
+    const loadAnalysisRuns = async () => {
+      if (!user) return;
+      
+      const { data, error } = await getAnalysisRuns();
+      if (error) {
+        toast({
+          title: "Error loading analysis history",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else if (data) {
+        setAnalysisRuns(data);
+      }
+    };
+
+    loadAnalysisRuns();
+  }, [user, toast]);
+
+  const handleAddressSubmit = async (address: string) => {
+    setIsLoading(true);
     setCurrentAddress(address);
-    setCurrentView('processing');
-    setProcessingStep('imagery');
-    setProcessingStatus('processing');
     
-    // Simulate processing steps
-    setTimeout(() => setProcessingStep('analysis'), 2000);
-    setTimeout(() => setProcessingStep('calculate'), 6000);
-    setTimeout(() => setProcessingStep('report'), 8000);
-    setTimeout(() => {
-      setProcessingStatus('completed');
-      setCurrentView('results');
-    }, 10000);
+    try {
+      const { data, error } = await createAnalysisRun(address);
+      
+      if (error) {
+        toast({
+          title: "Error starting analysis",
+          description: error.message,
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      if (data) {
+        setCurrentView('processing');
+        setProcessingStep('imagery');
+        setProcessingStatus('processing');
+        
+        // For demo purposes, simulate the processing
+        setTimeout(() => setProcessingStep('analysis'), 2000);
+        setTimeout(() => setProcessingStep('calculate'), 6000);
+        setTimeout(() => setProcessingStep('report'), 8000);
+        setTimeout(() => {
+          setProcessingStatus('completed');
+          setCurrentView('results');
+          // Reload analysis runs to show the completed one
+          loadAnalysisRuns();
+        }, 10000);
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to start analysis",
+        variant: "destructive",
+      });
+    }
+    
+    setIsLoading(false);
+  };
+
+  const loadAnalysisRuns = async () => {
+    if (!user) return;
+    
+    const { data, error } = await getAnalysisRuns();
+    if (error) {
+      console.error('Error loading analysis runs:', error);
+    } else if (data) {
+      setAnalysisRuns(data);
+    }
   };
 
   const handleCancel = () => {
@@ -122,6 +163,22 @@ export default function Dashboard() {
       'report': 100
     };
     return stepProgress[processingStep] || 0;
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Signed out successfully",
+        description: "You have been signed out of your account.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error signing out",
+        description: "There was a problem signing out.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (currentView === 'processing') {
@@ -153,40 +210,60 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
-      {/* Hero Section */}
-      <div className="relative overflow-hidden">
-        <div 
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
-          style={{ backgroundImage: `url(${heroImage})` }}
-        />
-        <div className="relative bg-gradient-primary/90 text-white">
-          <div className="container mx-auto px-4 py-16 text-center">
-            <div className="max-w-4xl mx-auto">
-              <h1 className="text-4xl md:text-6xl font-bold mb-6">
-                Roof Dynamics
-              </h1>
-              <p className="text-xl md:text-2xl mb-8 opacity-90">
-                Professional roof inspection reports powered by satellite imagery and AI analysis
-              </p>
-              <div className="flex flex-wrap justify-center gap-4 text-sm md:text-base">
+    <AuthRequired>
+      <div className="min-h-screen bg-gradient-subtle">
+        {/* Hero Section */}
+        <div className="relative overflow-hidden">
+          <div 
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
+            style={{ backgroundImage: `url(${heroImage})` }}
+          />
+          <div className="relative bg-gradient-primary/90 text-white">
+            <div className="container mx-auto px-4 py-16">
+              {/* User Header */}
+              <div className="flex justify-between items-center mb-8">
                 <div className="flex items-center gap-2">
-                  <Building2 className="w-5 h-5" />
-                  <span>Satellite Imagery</span>
+                  <User className="w-6 h-6" />
+                  <span className="text-lg">Welcome, {user?.email}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Building2 className="w-5 h-5" />
-                  <span>AI-Powered Analysis</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Building2 className="w-5 h-5" />
-                  <span>Professional Reports</span>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleSignOut}
+                  className="text-white border-white/20 hover:bg-white/10"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </Button>
+              </div>
+              
+              <div className="text-center">
+                <div className="max-w-4xl mx-auto">
+                  <h1 className="text-4xl md:text-6xl font-bold mb-6">
+                    Roof Dynamics
+                  </h1>
+                  <p className="text-xl md:text-2xl mb-8 opacity-90">
+                    Professional roof inspection reports powered by satellite imagery and AI analysis
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-4 text-sm md:text-base">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5" />
+                      <span>Satellite Imagery</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5" />
+                      <span>AI-Powered Analysis</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5" />
+                      <span>Professional Reports</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-12">
@@ -203,12 +280,15 @@ export default function Dashboard() {
           </TabsList>
           
           <TabsContent value="new" className="mt-8">
-            <AddressInput onSubmit={handleAddressSubmit} />
+            <AddressInput 
+              onSubmit={handleAddressSubmit} 
+              isLoading={isLoading}
+            />
           </TabsContent>
           
           <TabsContent value="history" className="mt-8">
             <AnalysisHistory 
-              runs={mockHistoryData}
+              runs={analysisRuns}
               onRetryAnalysis={(address) => {
                 setCurrentAddress(address);
                 handleAddressSubmit(address);
@@ -256,6 +336,7 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
-    </div>
+      </div>
+    </AuthRequired>
   );
 }
